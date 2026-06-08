@@ -188,10 +188,11 @@ All wage columns use `SAFE_CAST(REPLACE(REPLACE(col, '#', ''), '*', '') AS NUMER
 
 ## What's next for FairPay AI
 
+- **Expanded HRIS integration** — Integrate with more HRIS platforms (Workday, BambooHR) via Fivetran connectors
+- **Attrition prediction** - Add predictive attrition coupling (flight risk × underpayment)
 - **Pay equity analysis** — gender and demographic pay gap detection when statistically significant sample sizes are available
-- **Automated remediation** — trigger Fivetran syncs when data staleness is detected by the health agent
-- **Expanded market data** — international benchmarks (EU, APAC) and industry-specific surveys
-- **Slack/Teams notifications** — real-time alerts when critical market misalignment is detected
+- **Additional market data** — international benchmarks (EU, APAC) and industry-specific surveys
+- **Total Reward** — Add total compensation modeling (equity, bonuses, benefits)
 - **Multi-tenant architecture** — one deployment serving multiple business units with role-based access
 
 ---
@@ -219,7 +220,7 @@ fairpay-ai/
 ├── .env                         # Fivetran + GCP credentials
 ├── fairpay_agent/
 │   ├── __init__.py
-│   └── agent.py                 # 5-agent pipeline (730 lines)
+│   └── agent.py                 # 5-agent pipeline 
 ├── fivetran-mcp/
 │   ├── server.py                # Fivetran MCP server
 │   └── .venv/                   # MCP server dependencies
