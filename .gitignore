@@ -1,0 +1,47 @@
+# ═══════════════════════════════════════════════════════════
+# FairPay AI — .gitignore
+# ═══════════════════════════════════════════════════════════
+
+# Credentials (NEVER commit)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+fivetran-mcp/.venv/
+
+# ADK session data
+.adk/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Logs
+*.log
