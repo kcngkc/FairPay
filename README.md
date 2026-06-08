@@ -10,7 +10,7 @@
 [![BigQuery](https://img.shields.io/badge/BigQuery-Analytics-669DF6?style=for-the-badge&logo=google-cloud)](https://cloud.google.com/bigquery)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python)](https://python.org/)
 
-[🚀 Live Demo](#) • [🎥 Demo Video](#) • [📖 Source Code](./fairpay_agent/agent.py)
+[🚀 Live Demo](https://fairpay-ai-307483004262.us-central1.run.app) • [🎥 Demo Video](#) • [📖 Source Code](./fairpay_agent/agent.py)
 
 ---
 
@@ -188,8 +188,6 @@ All wage columns use `SAFE_CAST(REPLACE(REPLACE(col, '#', ''), '*', '') AS NUMER
 
 ## What's next for FairPay AI
 
-- **Cloud Run deployment** — containerized production hosting with auto-scaling
-- **Arize Phoenix integration** — agent observability, trace analysis, and prompt evaluation
 - **Pay equity analysis** — gender and demographic pay gap detection when statistically significant sample sizes are available
 - **Automated remediation** — trigger Fivetran syncs when data staleness is detected by the health agent
 - **Expanded market data** — international benchmarks (EU, APAC) and industry-specific surveys
