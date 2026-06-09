@@ -185,19 +185,28 @@ escalation_tool = FunctionTool(escalate_market_misalignment)
 # NOTE: StdioServerParameters.env REPLACES the subprocess environment.
 # We must include PATH and HOME for the MCP server to function.
 
-fivetran_toolset = MCPToolset(
-    connection_params=StdioServerParameters(
-        command=FIVETRAN_PYTHON,
-        args=[FIVETRAN_SERVER],
-        env={
-            "FIVETRAN_API_KEY": os.environ.get("FIVETRAN_API_KEY", ""),
-            "FIVETRAN_API_SECRET": os.environ.get("FIVETRAN_API_SECRET", ""),
-            "FIVETRAN_ALLOW_WRITES": "true",
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "HOME": os.environ.get("HOME", ""),
-        },
-    ),
-)
+# Fivetran MCP — auto-detects local vs Cloud Run.
+# Local: connects via StdioServerParameters (subprocess)
+# Cloud Run: fivetran_toolset = None (graceful skip)
+
+_mcp_available = os.path.exists(FIVETRAN_PYTHON) and os.path.exists(FIVETRAN_SERVER)
+
+if _mcp_available:
+    fivetran_toolset = MCPToolset(
+        connection_params=StdioServerParameters(
+            command=FIVETRAN_PYTHON,
+            args=[FIVETRAN_SERVER],
+            env={
+                "FIVETRAN_API_KEY": os.environ.get("FIVETRAN_API_KEY", ""),
+                "FIVETRAN_API_SECRET": os.environ.get("FIVETRAN_API_SECRET", ""),
+                "FIVETRAN_ALLOW_WRITES": "true",
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "HOME": os.environ.get("HOME", ""),
+            },
+        ),
+    )
+else:
+    fivetran_toolset = None
 
 
 # ═══════════════════════════════════════════════════════════
@@ -240,11 +249,29 @@ def skip_if_cached(callback_context: CallbackContext) -> types.Content | None:
 
 
 # ═══════════════════════════════════════════════════════════
-# AGENT 0: INPUT ROUTER
+DEFAULT_STATE = {
+    "health_report": "Pipeline health check not available. Proceed with analysis using available data.",
+    "gap_report": "Data gap check not available. Proceed with analysis using available data.",
+    "user_intent": "",
+    "benchmark_results": "",
+    "final_report": "",
+}
+
+
+def initialize_state(callback_context: CallbackContext) -> None:
+    """Set default state values if they don't exist yet."""
+    for key, default in DEFAULT_STATE.items():
+        if key not in callback_context.state:
+            callback_context.state[key] = default
+
+
+# ═══════════════════════════════════════════════════════════
+# # AGENT 0: INPUT ROUTER
 # ═══════════════════════════════════════════════════════════
 
 input_router = LlmAgent(
     name="input_router",
+    before_agent_callback=initialize_state,
     model="gemini-2.5-flash",
     description="Validates user input and classifies intent for the pipeline.",
     generate_content_config=types.GenerateContentConfig(
@@ -295,7 +322,7 @@ data_health_agent = LlmAgent(
     model="gemini-2.5-flash",
     description="Checks Fivetran pipeline health and passes user question downstream.",
     generate_content_config=TOOL_AGENT_CONFIG,
-    tools=[fivetran_toolset],
+    tools=[fivetran_toolset] if fivetran_toolset else [],
     output_key="health_report",
     before_agent_callback=skip_if_cached,
     instruction="""You are the Data Health Agent, the FIRST step in the
