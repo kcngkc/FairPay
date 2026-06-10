@@ -10,7 +10,7 @@ SequentialAgent (deterministic orchestration — no LLM controls flow)
 ├── 1. data_health_agent   — Fivetran MCP: pipeline health check
 │                            (gemini-2.5-flash — fast tool calling)
 ├── 2. data_gap_agent      — BigQuery: coverage gap detection
-│                            (gemini-2.5-pro — complex reasoning)
+│                            (gemini-3.5-flash — deterministic reasoning)
 ├── 3. benchmarking_agent  — BigQuery: market vs internal analysis
 │                            (gemini-2.5-flash — deterministic math)
 └── 4. narrative_agent     — Gemini: executive report + HITL gate
@@ -77,13 +77,13 @@ TOOL_AGENT_CONFIG = types.GenerateContentConfig(
 BENCHMARK_CONFIG = types.GenerateContentConfig(
     temperature=0.2,
     top_p=0.95,
-    max_output_tokens=8192,
+    max_output_tokens=4096,
 )
 
 NARRATIVE_CONFIG = types.GenerateContentConfig(
     temperature=0.5,
     top_p=0.95,
-    max_output_tokens=12000,
+    max_output_tokens=8192,
 )
 
 
@@ -177,17 +177,13 @@ def escalate_market_misalignment(finding_summary: str, severity: str) -> dict:
         ),
     }
 
-
-escalation_tool = FunctionTool(escalate_market_misalignment)
-
-
 # -- Fivetran MCP Toolset --
 # NOTE: StdioServerParameters.env REPLACES the subprocess environment.
 # We must include PATH and HOME for the MCP server to function.
 
 # Fivetran MCP — auto-detects local vs Cloud Run.
 # Local: connects via StdioServerParameters (subprocess)
-# Cloud Run: fivetran_toolset = None (graceful skip)
+# Cloud Run: fivetran_toolset = Rest API (graceful skip)
 
 _mcp_available = os.path.exists(FIVETRAN_PYTHON) and os.path.exists(FIVETRAN_SERVER)
 
@@ -250,8 +246,8 @@ def skip_if_cached(callback_context: CallbackContext) -> types.Content | None:
 
 # ═══════════════════════════════════════════════════════════
 DEFAULT_STATE = {
-    "health_report": "Pipeline health check not available. Proceed with analysis using available data.",
-    "gap_report": "Data gap check not available. Proceed with analysis using available data.",
+    "health_report": "",
+    "gap_report": "",
     "user_intent": "",
     "benchmark_results": "",
     "final_report": "",
@@ -272,7 +268,7 @@ def initialize_state(callback_context: CallbackContext) -> None:
 input_router = LlmAgent(
     name="input_router",
     before_agent_callback=initialize_state,
-    model="gemini-2.5-flash",
+    model="gemini-3.5-flash",
     description="Validates user input and classifies intent for the pipeline.",
     generate_content_config=types.GenerateContentConfig(
         temperature=0.0, top_p=0.95, max_output_tokens=512,
@@ -289,7 +285,7 @@ YOUR JOB: Classify the user's message into one of these categories:
 2. PIPELINE_CHECK — User asks about data freshness, pipeline status,
    Fivetran connectors, or sync health.
 
-3. REFRESH — User says "refresh", "recheck", "rerun", or similar.
+3. REFRESH — User says "refresh", "recheck", "rerun", "reload connection schema" , "Sync connection" or similar.
 
 4. OUT_OF_SCOPE — Greetings, unrelated questions, or anything not
    about compensation analysis or data pipelines.
@@ -319,7 +315,7 @@ health. What would you like to analyze?""",
 
 data_health_agent = LlmAgent(
     name="data_health",
-    model="gemini-2.5-flash",
+    model="gemini-3.5-flash",
     description="Checks Fivetran pipeline health and passes user question downstream.",
     generate_content_config=TOOL_AGENT_CONFIG,
     tools=[fivetran_toolset] if fivetran_toolset else [],
@@ -342,10 +338,12 @@ YOUR TOOLS (use ONLY these):
 ══════════════════════════════════════
 Fivetran MCP tools:
 - list_connections → list all Fivetran connectors
-- get_connection_details → sync status, last sync time
-- get_connection_state → current sync state
-- get_connection_schema_config → verify table schema
-- sync_connection → trigger sync (only when user explicitly asks)
+- get_connection_details → get sync status, last sync time, setup_state
+- get_connection_state → check current sync state
+- get_connection_schema_config → verify table schema matches expectations
+- reload_connection_schema_config → refresh if HRIS structure changed
+- sync_connection → trigger a new sync (only when user explicitly asks)
+- modify_connection_state → pause/resume connectors
 
 DO NOT USE: query_bigquery, escalate_market_misalignment
 Those tools belong to other agents.
@@ -367,7 +365,6 @@ Pipeline Health Summary:
 - [connector_name]: [status] | Last sync: [timestamp] | Errors: [none/desc]
 Overall: [HEALTHY / DEGRADED / CRITICAL]
 
-User Question: [paste the user's original question here EXACTLY]
 
 CRITICAL RULES:
 - ALWAYS call list_connections first. This is mandatory.
@@ -384,7 +381,7 @@ CRITICAL RULES:
 
 data_gap_agent = LlmAgent(
     name="data_gap_detector",
-    model="gemini-2.5-pro",
+    model="gemini-3.5-flash",
     description="Detects gaps between internal HRIS positions and available BLS market benchmarks.",
     generate_content_config=TOOL_AGENT_CONFIG,
     tools=[bigquery_tool],
@@ -443,7 +440,7 @@ Execute immediately. Do NOT ask the user for anything.""",
 
 benchmarking_agent = LlmAgent(
     name="benchmarking",
-    model="gemini-2.5-flash",
+    model="gemini-3.5-flash",
     description="Performs compensation benchmarking with SAFE_CAST for dirty BLS data, computes compa-ratio and deterministic confidence score.",
     generate_content_config=BENCHMARK_CONFIG,
     tools=[bigquery_tool],
@@ -575,10 +572,10 @@ Execute ALL steps immediately. Do NOT ask for permission.""",
 
 narrative_agent = LlmAgent(
     name="narrative",
-    model="gemini-2.5-pro",
+    model="gemini-3.1-pro-preview",
     description="Generates executive compensation report. Escalates to HR when employees are significantly below market.",
     generate_content_config=NARRATIVE_CONFIG,
-    tools=[escalation_tool],
+    tools=[],
     output_key="final_report",
     instruction="""You are the Narrative Agent for FairPay AI.
 
@@ -589,15 +586,7 @@ format below. Use ONLY the data from {benchmark_results}. Do NOT
 recalculate any numbers. Do NOT invent data.
 
 ══════════════════════════════════════
-YOUR TOOLS (use ONLY these):
-══════════════════════════════════════
-- escalate_market_misalignment → Escalate when compa_ratio < 0.85
-
-  Arguments:
-    finding_summary (str): 2-3 sentence factual summary
-    severity (str): "critical" (<0.75) or "high" (0.75-0.85)
-
-DO NOT USE: query_bigquery or any Fivetran tools.
+DO NOT USE: any Fivetran tools.
 Those tools belong to other agents.
 ══════════════════════════════════════
 
@@ -718,13 +707,27 @@ RULES
    {benchmark_results}, write "Data not available."
 
 4. MARKET MISALIGNMENT ESCALATION — EXCEPTION ONLY:
-   - If compa_ratio < 0.75: call escalate_market_misalignment with
-     severity="critical" and a 2-sentence factual finding_summary.
-   - If compa_ratio is 0.75-0.85: call escalate_market_misalignment
-     with severity="high" and a 2-sentence factual finding_summary.
-   - If compa_ratio >= 0.85: do NOT call escalate_market_misalignment.
-     State: "Compensation is within acceptable market range."
+4. MARKET MISALIGNMENT ESCALATION — EXCEPTION ONLY:
+   - If compa_ratio < 0.75, add this block to the report:
 
+     ### ⚠️ ESCALATION: CRITICAL MARKET MISALIGNMENT
+     **Severity:** CRITICAL (compa-ratio < 0.75)
+     **Status:** Escalated to HR Leadership
+     **Finding:** [2-sentence factual summary with numbers]
+     **Action Required:** Compensation committee must review market
+     adjustment options within 30 days to reduce attrition risk.
+
+   - If compa_ratio is 0.75-0.85, add this block:
+
+     ### ⚠️ ESCALATION: HIGH MARKET MISALIGNMENT
+     **Severity:** HIGH (compa-ratio 0.75–0.85)
+     **Status:** Escalated to HR Leadership
+     **Finding:** [2-sentence factual summary with numbers]
+     **Action Required:** Compensation committee should review
+     market adjustment options within 30 days.
+
+   - If compa_ratio >= 0.85: do NOT add an escalation block.
+     State: "Compensation is within acceptable market range."
 5. Do NOT ask follow-up questions. Do NOT end with "Would you like
    me to..." or any continuation prompt. This is a terminal report.
    End with the report content and nothing else.
