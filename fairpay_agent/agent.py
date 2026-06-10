@@ -10,7 +10,7 @@ SequentialAgent (deterministic orchestration — no LLM controls flow)
 ├── 1. data_health_agent   — Fivetran MCP: pipeline health check
 │                            (gemini-2.5-flash — fast tool calling)
 ├── 2. data_gap_agent      — BigQuery: coverage gap detection
-│                            (gemini-3.5-flash — deterministic reasoning)
+│                            (gemini-2.5-flash — deterministic reasoning)
 ├── 3. benchmarking_agent  — BigQuery: market vs internal analysis
 │                            (gemini-2.5-flash — deterministic math)
 └── 4. narrative_agent     — Gemini: executive report + HITL gate
@@ -268,7 +268,7 @@ def initialize_state(callback_context: CallbackContext) -> None:
 input_router = LlmAgent(
     name="input_router",
     before_agent_callback=initialize_state,
-    model="gemini-3.5-flash",
+    model="gemini-2.5-flash",
     description="Validates user input and classifies intent for the pipeline.",
     generate_content_config=types.GenerateContentConfig(
         temperature=0.0, top_p=0.95, max_output_tokens=512,
@@ -315,7 +315,7 @@ health. What would you like to analyze?""",
 
 data_health_agent = LlmAgent(
     name="data_health",
-    model="gemini-3.5-flash",
+    model="gemini-2.5-flash",
     description="Checks Fivetran pipeline health and passes user question downstream.",
     generate_content_config=TOOL_AGENT_CONFIG,
     tools=[fivetran_toolset] if fivetran_toolset else [],
@@ -381,7 +381,7 @@ CRITICAL RULES:
 
 data_gap_agent = LlmAgent(
     name="data_gap_detector",
-    model="gemini-3.5-flash",
+    model="gemini-2.5-flash",
     description="Detects gaps between internal HRIS positions and available BLS market benchmarks.",
     generate_content_config=TOOL_AGENT_CONFIG,
     tools=[bigquery_tool],
@@ -440,7 +440,7 @@ Execute immediately. Do NOT ask the user for anything.""",
 
 benchmarking_agent = LlmAgent(
     name="benchmarking",
-    model="gemini-3.5-flash",
+    model="gemini-2.5-flash",
     description="Performs compensation benchmarking with SAFE_CAST for dirty BLS data, computes compa-ratio and deterministic confidence score.",
     generate_content_config=BENCHMARK_CONFIG,
     tools=[bigquery_tool],
@@ -572,7 +572,7 @@ Execute ALL steps immediately. Do NOT ask for permission.""",
 
 narrative_agent = LlmAgent(
     name="narrative",
-    model="gemini-3.1-pro-preview",
+    model="gemini-2.5-pro",
     description="Generates executive compensation report. Escalates to HR when employees are significantly below market.",
     generate_content_config=NARRATIVE_CONFIG,
     tools=[],
