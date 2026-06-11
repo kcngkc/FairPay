@@ -55,9 +55,6 @@ from mcp import StdioServerParameters
 # ═══════════════════════════════════════════════════════════
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FIVETRAN_PYTHON = os.path.join(PROJECT_ROOT, "fivetran-mcp", ".venv", "bin", "python3")
-FIVETRAN_SERVER = os.path.join(PROJECT_ROOT, "fivetran-mcp", "server.py")
-
 GCP_PROJECT = "fairpay-498216"
 BQ_MARKET = f"`{GCP_PROJECT}.google_sheets.bls_oews_market_data`"
 BQ_XREF = f"`{GCP_PROJECT}.google_sheets.xref_position_to_soc`"
@@ -77,7 +74,7 @@ TOOL_AGENT_CONFIG = types.GenerateContentConfig(
 BENCHMARK_CONFIG = types.GenerateContentConfig(
     temperature=0.2,
     top_p=0.95,
-    max_output_tokens=4096,
+    max_output_tokens=8192,
 )
 
 NARRATIVE_CONFIG = types.GenerateContentConfig(
@@ -180,18 +177,39 @@ def escalate_market_misalignment(finding_summary: str, severity: str) -> dict:
 # -- Fivetran MCP Toolset --
 # NOTE: StdioServerParameters.env REPLACES the subprocess environment.
 # We must include PATH and HOME for the MCP server to function.
+# ═══════════════════════════════════════════════════════════
+# FIVETRAN MCP — auto-detects local vs Cloud Run. 
+#                Runtime config (no hardcoded paths)
+# ═══════════════════════════════════════════════════════════
 
-# Fivetran MCP — auto-detects local vs Cloud Run.
-# Local: connects via StdioServerParameters (subprocess)
-# Cloud Run: fivetran_toolset = Rest API (graceful skip)
-
-_mcp_available = os.path.exists(FIVETRAN_PYTHON) and os.path.exists(FIVETRAN_SERVER)
+_fivetran_mcp_dir = os.path.join(PROJECT_ROOT, "fivetran-mcp")
+_fivetran_venv_python = os.path.join(_fivetran_mcp_dir, ".venv", "bin", "python3")
+_fivetran_server_py = os.path.join(_fivetran_mcp_dir, "server.py")
+_mcp_config_path = os.path.join(_fivetran_mcp_dir, ".mcp.json")
+_mcp_available = os.path.exists(_fivetran_venv_python) and os.path.exists(_fivetran_server_py)
 
 if _mcp_available:
+    # Generate .mcp.json from env vars + resolved paths at runtime
+    _runtime_config = {
+        "mcpServers": {
+            "fivetran": {
+                "command": _fivetran_venv_python,
+                "args": [_fivetran_server_py],
+                "env": {
+                    "FIVETRAN_API_KEY": os.environ.get("FIVETRAN_API_KEY", ""),
+                    "FIVETRAN_API_SECRET": os.environ.get("FIVETRAN_API_SECRET", ""),
+                    "FIVETRAN_ALLOW_WRITES": "true",
+                }
+            }
+        }
+    }
+    with open(_mcp_config_path, "w") as f:
+        json.dump(_runtime_config, f, indent=2)
+
     fivetran_toolset = MCPToolset(
         connection_params=StdioServerParameters(
-            command=FIVETRAN_PYTHON,
-            args=[FIVETRAN_SERVER],
+            command=_fivetran_venv_python,
+            args=[_fivetran_server_py],
             env={
                 "FIVETRAN_API_KEY": os.environ.get("FIVETRAN_API_KEY", ""),
                 "FIVETRAN_API_SECRET": os.environ.get("FIVETRAN_API_SECRET", ""),
@@ -203,7 +221,6 @@ if _mcp_available:
     )
 else:
     fivetran_toolset = None
-
 
 # ═══════════════════════════════════════════════════════════
 # SESSION CACHE — Skip agents if results already exist
