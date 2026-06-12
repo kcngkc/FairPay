@@ -10,7 +10,7 @@
 [![BigQuery](https://img.shields.io/badge/BigQuery-Analytics-669DF6?style=for-the-badge&logo=google-cloud)](https://cloud.google.com/bigquery)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python)](https://python.org/)
 
-[🚀 Live Demo](https://fairpay-ai-307483004262.us-central1.run.app) • [🎥 Demo Video](https://vimeo.com/1199498932) • [📖 Source Code](./fairpay_agent/agent.py)
+[🚀 Live Demo](https://fairpay-ai-307483004262.us-central1.run.app) • [🎥 Demo Video](https://vimeo.com/manage/videos/1200328900) • [📖 Source Code](https://github.com/kcngkc/FairPay)
 
 ---
 
